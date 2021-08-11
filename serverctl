@@ -1,0 +1,103 @@
+#!/bin/bash
+file=`basename $0` 
+
+cd `dirname $0` 
+
+ROOT_DIR=`pwd`
+BIN_DIR=$ROOT_DIR/bin
+
+APPNAME=$2
+
+wait_for () {
+        try=0
+        #先sleep1秒, 防止启动后马上又出错退出的情况
+        sleep 1
+        while test $try -lt 5 ; do
+        case "$1" in
+            'created')
+                    alive=`ps -ef | grep /$APPNAME | grep -v grep | awk '{print $2}'`
+
+                    if [ "$alive" != "" ]; then
+                        return 0
+                    fi
+                ;;
+
+            'removed')
+                    alive=`ps -ef | grep /$APPNAME | grep -v grep | awk '{print $2}'`
+
+                    if [ "$alive" = "" ]; then
+                        return 0
+                    fi
+                ;;
+        esac
+
+                echo -n .
+                try=`expr $try + 1`
+                sleep 1
+
+        done
+        return 1
+}
+
+case "$1" in
+        start)
+               echo "starting...."
+
+               alive=`ps -ef | grep /$APPNAME | grep -v grep | awk '{print $2}'`
+
+               if [ "$alive" != "" ]; then
+                   echo "process already exist! name:$APPNAME pid:$alive"
+                   exit 1
+               fi
+
+               nohup $ROOT_DIR/bin/$APPNAME >> $ROOT_DIR/bin/$APPNAME.log &
+
+               wait_for created
+
+               if [ 0 != $? ] 
+               then
+                   echo "failed, please refer to $ROOT_DIR/bin/$APPNAME.log for more detail"
+                   exit 1
+               else
+                   echo "done"
+               fi
+        ;;
+        
+        stop)
+                echo "stopping...."
+
+                BIN_NUM=`ps -ef | grep /$APPNAME | grep -v grep | wc -l`
+
+                if [ $BIN_NUM -gt 1 ]; then
+                    echo "more than one binfile like '$APPNAME' running"
+                    exit 1
+                fi
+
+                alive=`ps -ef | grep /$APPNAME | grep -v grep | awk '{print $2}'`
+
+                if [ "$alive" != "" ]; then
+                    kill -9 $alive
+                    if [ 0 != $? ]; then
+                        echo "failed"
+                        exit 1
+                    fi
+                fi
+
+                echo "done"
+        ;;
+
+        restart)
+                sh $file stop
+                echo "To start session in 2 seconds later..."
+                sleep 2
+                sh $file start $2
+                if [ $? != 0 ]
+                then
+                    echo "failed"
+                    exit 1
+                fi     
+        ;;
+esac
+
+exit 0
+
